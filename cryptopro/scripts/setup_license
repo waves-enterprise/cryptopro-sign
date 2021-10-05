@@ -1,0 +1,14 @@
+#!/bin/bash
+
+#
+# Загружаем лицензию
+#
+
+if [[ $1 ]];
+  then
+    echo "Setting license from env"
+    cpconfig -license -set "$1"
+  else
+    echo "No license found. Using trial"
+fi
+cpconfig -license -view

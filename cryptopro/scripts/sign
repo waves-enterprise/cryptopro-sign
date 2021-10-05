@@ -1,0 +1,26 @@
+#!/bin/bash
+
+#
+# Подписание документа
+#
+
+# containerHash должен быть заменен на актуальный во время создания образа из Dockerfile
+containerHash=""
+
+if [[ -z "$containerHash" ]]; then
+  echo "containerHash is not specified"
+  exit 1
+fi
+
+tmp=`mktemp`
+cat - > "$tmp"
+err=$(cryptcp -sign -thumbprint "$containerHash" -nochain -hashAlg "1.2.643.7.1.1.2.2" -detached -pin "$1" "$tmp" "$tmp.sig")
+signResult=$?
+if [ "$signResult" != "0" ]; then
+  rm -f "$tmp" "$tmp.sig"
+  echo "Error: $err"
+  exit $signResult
+fi
+
+cat "$tmp.sig"
+rm -f "$tmp" "$tmp.sig"

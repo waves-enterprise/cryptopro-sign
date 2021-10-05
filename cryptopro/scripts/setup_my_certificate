@@ -1,0 +1,88 @@
+#!/bin/bash
+
+#
+# Установка сертификатов пользователя для проверки и подписания
+#
+
+cd "$(dirname "$0")"
+source lib/colors.sh
+source lib/functions.sh
+
+dir=`mktemp -d`
+cd "$dir"
+#cat - > "bundle.zip"
+echo "bundle file $1"
+unzip -q "$1"
+#rm bundle.zip
+
+# info "Temp dir: $dir"
+
+# проверка всех необходимых файлов в закрытом ключе
+function testprivk {
+  [ ! -f "$contShortName/header.key" ] && error "File header.key not found in $contShortName" && exit 1
+  [ ! -f "$contShortName/masks.key" ] && error "File masks.key not found in $contShortName" && exit 1
+  [ ! -f "$contShortName/masks2.key" ] && error "File masks2.key not found in $contShortName" && exit 1
+  [ ! -f "$contShortName/name.key" ] && error "File name.key not found in $contShortName" && exit 1
+  [ ! -f "$contShortName/primary.key" ] && error "File primary.key not found in $contShortName" && exit 1
+  [ ! -f "$contShortName/primary2.key" ] && error "File primary2.key not found in $contShortName" && exit 1
+}
+
+# для связки закрытого ключа с сертификатом необходимо указать полное наименование контейнера, которое находится в name.key
+# таким способом также можно выяснить название, но с cp1251 работает не устойчиво
+# function findContFullName {
+# 	contFullName=`csptest -keyset -enum_cont -verifycontext -unique | grep --fixed-strings "$contShortName" | cut -d '|' -f1`
+# 	if [ ! -n "$contFullName" ]; then
+# 		error "Proper container not found by short name: $contShortName"
+# 		exit 1
+# 	fi
+# }
+
+# xargs удаляет `./` из названия файла
+certFileName=`find -maxdepth 1 -type f \! -name . | head -n1 | xargs -I{} basename {}`
+contShortName=`find -maxdepth 1 -type d \! -name . | head -n1 | xargs -I{} basename {}`
+contFullName=`tail -c+5 "$contShortName/name.key"`
+
+# Есть контейнер, устанавливаем
+if [ -n "$contShortName" ]; then
+  info "Key container short name: $contShortName"
+  testprivk
+  cp -R "$contShortName" /var/opt/cprocsp/keys/root/
+  if [ "$?" -eq "0" ]; then
+    ok "Key container installed"
+  fi
+fi
+
+# Есть сертификат
+if [ -n "$certFileName" ]; then
+
+	if [ ! -n "$contShortName" ]; then
+		# устанавливается только сертификат
+		certmgr -inst -file "$certFileName"
+
+		if [ "$?" -eq "1" ]; then
+			ok "Certificate installed"
+			warning "No PrivateKey Link"
+		fi
+
+	else
+
+		# устанавливается сертификат + контейнер, нужно их связать ('PrivateKey Link')
+
+		info "Key container full name: $contFullName" | iconv -fcp1251 -tutf-8
+
+		if [ -z "$2" ]; then
+		  info "no PIN found"
+			# нет PIN
+			certmgr -inst -file "$certFileName" -cont '\\.\HDIMAGE\'"$contFullName"
+	  else
+	    info "use PIN to setup certificate"
+			# есть PIN
+			certmgr -inst -file "$certFileName" -pin "$2" -cont '\\.\HDIMAGE\'"$contFullName"
+	  fi
+
+	fi
+
+
+fi
+
+rm -rf "$dir"
