@@ -23,7 +23,7 @@ let contrainerHash: string | null = null
 const getContainerHash = async () => {
   if (!contrainerHash) {
     const response = await execute('certmgr -list')
-    const match = response.match(/SHA1 Hash\s*: (\w+)$/m)
+    const match = response.match(/SHA1 Thumbprint\s*: (\w+)$/m)
     if (!match) {
       throw new InternalException('Cannot get container hash. It seems that service is not correctly configured')
     }
