@@ -12,10 +12,14 @@ dir=`mktemp -d`
 cd "$dir"
 #cat - > "bundle.zip"
 echo "bundle file $1"
-unzip -q "$1"
-#rm bundle.zip
+if [ -n "$BUNDLE_PASSWORD" ]; then
+  info "use bundle password to unzip"
+  unzip -q -P "$BUNDLE_PASSWORD" "$1"
+else
+  info "no bundle password"
+  unzip -q "$1"
+fi
 
-# info "Temp dir: $dir"
 
 # проверка всех необходимых файлов в закрытом ключе
 function testprivk {
@@ -29,18 +33,17 @@ function testprivk {
 
 # для связки закрытого ключа с сертификатом необходимо указать полное наименование контейнера, которое находится в name.key
 # таким способом также можно выяснить название, но с cp1251 работает не устойчиво
-# function findContFullName {
-# 	contFullName=`csptest -keyset -enum_cont -verifycontext -unique | grep --fixed-strings "$contShortName" | cut -d '|' -f1`
-# 	if [ ! -n "$contFullName" ]; then
-# 		error "Proper container not found by short name: $contShortName"
-# 		exit 1
-# 	fi
-# }
+function findContFullName {
+  contFullName=`csptest -keyset -enum_cont -verifycontext -unique | grep --fixed-strings "$contShortName" | cut -d '|' -f2`
+  if [ -z "$contFullName" ]; then
+    error "Proper container not found by short name: $contShortName"
+    exit 1
+  fi
+}
 
 # xargs удаляет `./` из названия файла
 certFileName=`find -maxdepth 1 -type f \! -name . | head -n1 | xargs -I{} basename {}`
 contShortName=`find -maxdepth 1 -type d \! -name . | head -n1 | xargs -I{} basename {}`
-contFullName=`tail -c+5 "$contShortName/name.key"`
 
 # Есть контейнер, устанавливаем
 if [ -n "$contShortName" ]; then
@@ -55,7 +58,7 @@ fi
 # Есть сертификат
 if [ -n "$certFileName" ]; then
 
-	if [ ! -n "$contShortName" ]; then
+	if [ -z "$contShortName" ]; then
 		# устанавливается только сертификат
 		certmgr -inst -file "$certFileName"
 
@@ -67,6 +70,7 @@ if [ -n "$certFileName" ]; then
 	else
 
 		# устанавливается сертификат + контейнер, нужно их связать ('PrivateKey Link')
+		findContFullName
 
 		info "Key container full name: $contFullName" | iconv -fcp1251 -tutf-8
 
@@ -81,8 +85,6 @@ if [ -n "$certFileName" ]; then
 	  fi
 
 	fi
-
-
 fi
 
 rm -rf "$dir"
